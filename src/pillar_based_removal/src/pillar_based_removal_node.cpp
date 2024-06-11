@@ -3,10 +3,10 @@
 
 int main(int argc, char ** argv)
 {
-  (void) argc;
-  (void) argv;
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<PillarBasedRemoval>());
+  rclcpp::shutdown();
 
-  printf("hello world pillar_based_removal package\n");
   return 0;
 }
 
@@ -21,6 +21,9 @@ void PillarBasedRemoval::declare_param(const std::string& name,
 
 void PillarBasedRemoval::set_params()
 {
+  declare_param("subscription_name", "point_cloud", "This parameter decides the name of the node subscribed");
+  subscription_name_ = get_parameter("subscription_name").as_string();
+
   declare_param("device", "cpu", "This parameter decides which device you are going to use, 1. cpu (default), 2. cuda");
   declare_param("resolution", 0.4, "This parameter decides the side length of the square pillar, the unit is [meter]");
   declare_param("max_num_pillars", 30000, "This parameter decides how many pillars are allowed, set it to a reasonably 
@@ -38,6 +41,7 @@ void PillarBasedRemoval::set_params()
                                                          used. empty for global rebuild, the unit is [meter]");
 
   device_ = get_parameter("device").as_string();
+  device_num_ = device == "cpu" ? -1 : 0;
   resolution_ = get_parameter("resolution");
   max_num_pillars_ = get_parameter("max_num_pillars");
   lidar_ranges_ = get_parameter("lidar_ranges");
@@ -47,12 +51,29 @@ void PillarBasedRemoval::set_params()
   
 }
 
-void msgToTensor(const sensor_msgs::msg::PointCloud2 &point_cloud) {
-  received_point_cloud_ = point_cloud;
+
+void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg) {
+  pcl_conversions::moveFromROSMsg(received_point_cloud_msg, *received_point_cloud_);
+  num_received_points_ = received_point_cloud->points.size();
+  
+  point_cloud_tensor_ = tv::zeros({num_received_points_, 3}, tv::type_v<float>, device_num_);
+  for(size_t i = 0; i < num_received_points; i++) {
+    point_cloud_tensor(i, 0) = received_point_cloud->points[i].x;
+    point_cloud_tensor(i, 1) = received_point_cloud->points[i].y;
+    point_cloud_tensor(i, 2) = received_point_cloud->points[i].z;
+  }
 }
+
 
 PillarBasedRemoval::PillarBasedRemoval() : Node("pillar_based_removal_node") {
   set_params();
-  
+  pointcloud_subscriber_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+    subscription_name_, rclcpp::QoS(rclcpp::KeepLast(2)).best_effort().durability_volatile(),
+             std::bind(&PillarBasedRemoval::Callback, this, std::placeholders::_1)
+  );
+}
 
+
+void PillarBasedRemoval::Callback(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg) {
+  msgToTensor(received_point_cloud_msg);
 }

@@ -1,0 +1,11 @@
+pillar_based_removal_node:
+  ros__parameters:
+    subscription_name: "kitti/velo"
+
+    device: "cpu"
+    resolution: 0.4
+    max_num_pillars: 30000
+    lidar_ranges: [-90.0, -90.0, 90.0, 90.0]
+    environment_radius: 1.8
+    rebuild_radiuses: [1.8, 5.4]
+    range_split: [30.0]

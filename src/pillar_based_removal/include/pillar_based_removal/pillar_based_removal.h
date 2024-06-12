@@ -1,6 +1,8 @@
 #ifndef PILLAR_BASED_REMOVAL_H
 #define PILLAR_BASED_REMOVAL_H
 
+#include <chrono>
+
 // ros
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -16,6 +18,11 @@
 #include <spconvlib/cumm/common/TensorView.h>
 
 class PillarBasedRemoval : public rclcpp::Node {
+    // Time types
+    typedef std::chrono::high_resolution_clock Time;
+    typedef std::chrono::milliseconds ms;
+    typedef std::chrono::duration<float> fsec;
+
 
 private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_publisher_;

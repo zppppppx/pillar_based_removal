@@ -49,6 +49,7 @@ void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &receiv
   pcl::fromROSMsg<PointT>(received_point_cloud_msg, received_point_cloud_);
   num_received_points_ = received_point_cloud_.points.size();
   
+  auto t0 = Time::now();
   point_cloud_tensor_ = tv::zeros({num_received_points_, 3}, tv::type_v<float>, device_num_);
   auto point_cloud_tensor_rw = point_cloud_tensor_.tview<float, 2>();
   for(size_t i = 0; i < num_received_points_; i++) {
@@ -56,6 +57,9 @@ void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &receiv
     point_cloud_tensor_rw((int)i, 1) = received_point_cloud_.points[i].y;
     point_cloud_tensor_rw((int)i, 2) = received_point_cloud_.points[i].z;
   }
+  auto t1 = Time::now();
+  fsec duration = t1 - t0;
+  RCLCPP_INFO(get_logger(), "The time needed for converting %d points to tensor is %f", (int) num_received_points_, duration);
 }
 
 

@@ -24,7 +24,7 @@ private:
 
     // sensor_msgs::msg::PointCloud2 received_point_cloud_;
     // data variables
-    PointCloudT::Ptr received_point_cloud_;
+    PointCloudT received_point_cloud_;
     sensor_msgs::msg::PointCloud2 target_point_cloud_;
     tv::Tensor point_cloud_tensor_;
     size_t num_received_points_;
@@ -33,17 +33,19 @@ private:
     // parameters
     std::string device_;
     int device_num_ = -1;
-    float resolution_;
+    double resolution_;
     int max_num_pillars_;
     int num_features_;
-    std::vector<float> lidar_ranges_;
-    float environment_radius_;
-    std::vector<float> rebuild_radiuses_;
-    std::vector<float> range_split_;
+    std::vector<double> lidar_ranges_;
+    double environment_radius_;
+    std::vector<double> rebuild_radiuses_;
+    std::vector<double> range_split_;
 
     
     // A helper function to declare parameters.
-    void declare_param(const std::string &name, const std::string &default_value, const std::string &description);
+    template<class T>
+    void declare_param(const std::string &name, const T &default_value, const std::string &description);
+    
     // Set necessary parameters.
     void set_params();
     // Convert the PointCloud2 message to tensorview tensor.
@@ -53,7 +55,7 @@ public:
     PillarBasedRemoval();
     ~PillarBasedRemoval();
 
-    void Callback(const sensor_msgs::msg::PointCloud2);
-}
+    void callback(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg);
+};
 
 #endif

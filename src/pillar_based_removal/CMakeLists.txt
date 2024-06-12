@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.20)
 project(pillar_based_removal)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -8,14 +8,17 @@ endif()
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
-  "/usr/include/pcl-1.12/"
+  "/root/spconv_build/cumm/include"
+  "/root/spconv_build/spconv/include"
+  "/opt/ros/humble/include/pcl_conversions"
 )
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(pcl REQUIRED)
+find_package(PCL REQUIRED)
+find_package(pcl_conversions REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -25,6 +28,12 @@ target_include_directories(pillar_based_removal_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 target_compile_features(pillar_based_removal_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+ament_target_dependencies(pillar_based_removal_node 
+  rclcpp 
+  sensor_msgs
+  PCL
+  pcl_conversions
+)
 
 install(TARGETS pillar_based_removal_node
   DESTINATION lib/${PROJECT_NAME})

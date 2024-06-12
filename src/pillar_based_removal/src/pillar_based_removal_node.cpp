@@ -1,14 +1,6 @@
 #include<pillar_based_removal/pillar_based_removal.h>
 
 
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<PillarBasedRemoval>());
-  rclcpp::shutdown();
-
-  return 0;
-}
 
 template<class T>
 void PillarBasedRemoval::declare_param(const std::string &name, 
@@ -75,7 +67,20 @@ PillarBasedRemoval::PillarBasedRemoval() : Node("pillar_based_removal_node") {
   );
 }
 
+PillarBasedRemoval::~PillarBasedRemoval() {}
+
 
 void PillarBasedRemoval::callback(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg) {
   msgToTensor(received_point_cloud_msg);
+}
+
+
+
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<PillarBasedRemoval>());
+  rclcpp::shutdown();
+
+  return 0;
 }

@@ -1,3 +1,6 @@
+#ifndef POINT_CLOUD_TYPE_H
+#define POINT_CLOUD_TYPE_H
+
 // pcl
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -19,3 +22,5 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointT,
 )
 
 typedef pcl::PointCloud<PointT> PointCloudT;
+
+#endif

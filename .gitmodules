@@ -1,0 +1,3 @@
+[submodule "src/kitti_to_ros2bag"]
+	path = src/kitti_to_ros2bag
+	url = https://github.com/zppppppx/kitti_to_ros2bag.git

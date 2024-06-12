@@ -27,7 +27,6 @@ add_executable(pillar_based_removal_node src/pillar_based_removal_node.cpp)
 target_include_directories(pillar_based_removal_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-  include
   ${PCL_INCLUDE_DIRS}
   "/root/spconv_build/cumm/include"
   "/root/spconv_build/spconv/include"

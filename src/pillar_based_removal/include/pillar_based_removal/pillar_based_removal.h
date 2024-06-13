@@ -2,6 +2,7 @@
 #define PILLAR_BASED_REMOVAL_H
 
 #include <chrono>
+#include <cmath>
 
 // ros
 #include <rclcpp/rclcpp.hpp>
@@ -37,11 +38,17 @@ private:
     // data variables
     PointCloudT received_point_cloud_;
     sensor_msgs::msg::PointCloud2 target_point_cloud_;
-    tv::Tensor point_cloud_tensor_;
-    tv::Tensor kept_pillars_;
     size_t num_received_points_;
     size_t num_send_points_;
+
+    tv::Tensor point_cloud_tensor_;
+    tv::Tensor kept_pillars_;
     tv::Tensor pillars_;
+    tv::Tensor pillars_lowest_;
+    tv::Tensor pillars_highest_;
+    tv::Tensor environment_lowest_;
+    tv::Tensor point_pillar_idx_;
+
 
     // parameters
     std::string device_;
@@ -63,8 +70,14 @@ private:
     void set_params();
     // Convert the PointCloud2 message to tensorview tensor.
     void msgToTensor(const sensor_msgs::msg::PointCloud2 &point_cloud);
+
+    /*
+    Algorithms implemention
+    */
     // Pillarize the point cloud and save the pillars into private variables
     void pillarize();
+
+    void remove_stage();
 
 public:
     PillarBasedRemoval();

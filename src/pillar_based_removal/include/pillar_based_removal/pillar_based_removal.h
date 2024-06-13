@@ -22,6 +22,10 @@ class PillarBasedRemoval : public rclcpp::Node {
     typedef std::chrono::high_resolution_clock Time;
     typedef std::chrono::milliseconds ms;
     typedef std::chrono::duration<float> fsec;
+    using PillarizeGPU3D =
+        spconvlib::spconv::csrc::sparse::all::ops3d::Point2Voxel;
+    using PillarizeCPU3D =
+        spconvlib::spconv::csrc::sparse::all::ops_cpu3d::Point2VoxelCPU;
 
 
 private:
@@ -34,8 +38,10 @@ private:
     PointCloudT received_point_cloud_;
     sensor_msgs::msg::PointCloud2 target_point_cloud_;
     tv::Tensor point_cloud_tensor_;
+    tv::Tensor kept_pillars_;
     size_t num_received_points_;
     size_t num_send_points_;
+    tv::Tensor pillars_;
 
     // parameters
     std::string device_;
@@ -57,6 +63,8 @@ private:
     void set_params();
     // Convert the PointCloud2 message to tensorview tensor.
     void msgToTensor(const sensor_msgs::msg::PointCloud2 &point_cloud);
+    // Pillarize the point cloud and save the pillars into private variables
+    void pillarize();
 
 public:
     PillarBasedRemoval();

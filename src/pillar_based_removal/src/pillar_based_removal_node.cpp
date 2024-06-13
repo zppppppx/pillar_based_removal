@@ -88,6 +88,7 @@ PillarBasedRemoval::~PillarBasedRemoval() {}
 void PillarBasedRemoval::callback(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg) {
   msgToTensor(received_point_cloud_msg);
   pillarize();
+  remove_stage();
 }
 
 

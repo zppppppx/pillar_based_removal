@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(pillar_based_removal)
+project(pillar_based_removal LANGUAGES CUDA CXX VERSION 0.1)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -10,6 +10,7 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(CUDA REQUIRED)
 
 add_executable(pillar_based_removal_node src/pillar_based_removal_node.cpp src/pillar_based_removal_algo.cpp)
 
@@ -36,6 +37,7 @@ ament_target_dependencies(pillar_based_removal_node
   sensor_msgs
   PCL
   pcl_conversions
+  CUDA
 )
 
 install(TARGETS pillar_based_removal_node

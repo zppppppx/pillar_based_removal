@@ -11,6 +11,10 @@
 // voxelization lib
 #include <spconvlib/spconv/csrc/sparse/all/ops3d/Point2Voxel.h>
 #include <spconvlib/spconv/csrc/sparse/all/ops_cpu3d/Point2VoxelCPU.h>
+#include <spconvlib/spconv/csrc/sparse/all/SpconvOps.h>
+#include <spconvlib/spconv/csrc/sparse/alloc/StaticAllocator.h>
+#include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPoolCPU.h>
+// #include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPool.h>
 
 // customized point cloud type
 #include "pillar_based_removal/point_cloud_type.h"
@@ -27,6 +31,8 @@ class PillarBasedRemoval : public rclcpp::Node {
         spconvlib::spconv::csrc::sparse::all::ops3d::Point2Voxel;
     using PillarizeCPU3D =
         spconvlib::spconv::csrc::sparse::all::ops_cpu3d::Point2VoxelCPU;
+    using SpconvOps = spconvlib::spconv::csrc::sparse::all::SpconvOps;
+    using StaticAllocator = spconvlib::spconv::csrc::sparse::alloc::StaticAllocator;
 
 
 private:
@@ -48,6 +54,9 @@ private:
     tv::Tensor pillars_highest_;
     tv::Tensor environment_lowest_;
     tv::Tensor point_pillar_idx_;
+    tv::Tensor pillar_indices_;
+
+    std::vector<int32_t> grid_size_;
 
 
     // parameters
@@ -77,7 +86,7 @@ private:
     // Pillarize the point cloud and save the pillars into private variables
     void pillarize();
 
-    void remove_stage();
+    void removal_stage();
 
 public:
     PillarBasedRemoval();

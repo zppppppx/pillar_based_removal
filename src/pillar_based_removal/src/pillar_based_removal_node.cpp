@@ -46,7 +46,7 @@ void PillarBasedRemoval::set_params()
 
 
 void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg) {
-  auto t0 = Time::now();
+  auto t0 = std::chrono::steady_clock::now();
 
   pcl::fromROSMsg<PointT>(received_point_cloud_msg, received_point_cloud_);
   num_received_points_ = received_point_cloud_.points.size();
@@ -64,12 +64,12 @@ void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &receiv
     }
   });
 
-  auto t1 = Time::now();
-  fsec duration = t1 - t0;
+  auto t1 = std::chrono::steady_clock::now();
+  std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
   
   RCLCPP_INFO(get_logger(), "The time needed for converting %d points to tensor is %f." 
                             "\nThe size of the point tensor is %d, and the first point's x is %f", 
-                            (int) num_received_points_, duration, 
+                            (int) num_received_points_, time_used_.count(), 
                             (int)point_cloud_tensor_.size(), point_cloud_tensor_ptr[0]);
 }
 
@@ -88,7 +88,7 @@ PillarBasedRemoval::~PillarBasedRemoval() {}
 void PillarBasedRemoval::callback(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg) {
   msgToTensor(received_point_cloud_msg);
   pillarize();
-  remove_stage();
+  removal_stage();
 }
 
 

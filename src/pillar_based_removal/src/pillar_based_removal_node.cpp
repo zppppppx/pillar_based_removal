@@ -14,8 +14,13 @@ void PillarBasedRemoval::declare_param(const std::string &name,
 
 void PillarBasedRemoval::set_params()
 {
+  declare_param<bool>("verbose", false, "If set true, the description of each module will be verbosely printed in the terminal");
+  verbose_ = get_parameter("verbose").as_bool();
+
   declare_param<std::string>("subscription_name", "point_cloud", "This parameter decides the name of the node subscribed");
   subscription_name_ = get_parameter("subscription_name").as_string();
+  declare_param<std::string>("publisher_name", "reduced_point_cloud", "This parameter decides the name of the publisher");
+  publisher_name_ = get_parameter("publisher_name").as_string();
 
   declare_param<std::string>("device", "cpu", "This parameter decides which device you are going to use, 1. cpu (default), 2. cuda");
   declare_param<double>("resolution", 0.4, "This parameter decides the side length of the square pillar, the unit is [meter]");
@@ -76,22 +81,52 @@ void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &receiv
   auto t1 = std::chrono::steady_clock::now();
   std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
   
-  RCLCPP_INFO(get_logger(), "The time needed for converting %d points to tensor is %f." 
-                            "\nThe size of the point tensor is %d, and the first point's x is %f", 
-                            (int) num_received_points_, time_used_.count(), 
-                            (int)point_cloud_tensor_.size(), point_cloud_tensor_ptr[0]);
+  if(verbose_)
+    RCLCPP_INFO(get_logger(), "The time needed for converting %d points to tensor is %f.",
+                              (int) num_received_points_, time_used_.count());
 }
 
 void PillarBasedRemoval::tensorToMsg() {
-  
+  // Save all the valid indexes
+  std::unordered_set<int> valid_voxel_indices;
+  auto kept_pillars_ptr = kept_pillars_.data_ptr<uint16_t>();
+  for(int i = 0; i < kept_pillars_.dim(0); i++) {
+    if(kept_pillars_ptr[i] > 0) {
+      valid_voxel_indices.insert(i);
+    }
+  }
+
+  PointCloudT target_point_cloud = PointCloudT();
+  // target_point_cloud.resize(num_send_points_);
+  // int idx = 0;
+  num_send_points_ = 0;
+  auto point_pillar_idx_ptr = point_pillar_idx_.data_ptr<int64_t>();
+  for(int i = 0; i < num_received_points_; i++) {
+    if(valid_voxel_indices.count((int) point_pillar_idx_ptr[i])) {
+      // target_point_cloud[idx] = received_point_cloud_[i];
+      target_point_cloud.push_back(received_point_cloud_[i]);
+      num_send_points_++;
+      // idx++;
+    }
+  }
+
+  pcl::toROSMsg(target_point_cloud, target_point_cloud_msg_);
+
+  // Publishing the point cloud message.
+  if(verbose_)
+    RCLCPP_INFO(get_logger(), "Publishing point cloud, the number of sent points is %zu", num_send_points_);
+  pointcloud_publisher_->publish(target_point_cloud_msg_);
 }
 
 
 PillarBasedRemoval::PillarBasedRemoval() : Node("pillar_based_removal_node") {
   set_params();
   pointcloud_subscriber_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-    subscription_name_, rclcpp::QoS(rclcpp::KeepLast(2)).best_effort().durability_volatile(),
+    subscription_name_, rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
              std::bind(&PillarBasedRemoval::callback, this, std::placeholders::_1)
+  );
+  pointcloud_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+    publisher_name_, rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile()
   );
 }
 
@@ -99,9 +134,16 @@ PillarBasedRemoval::~PillarBasedRemoval() {}
 
 
 void PillarBasedRemoval::callback(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg) {
+  auto t0 = std::chrono::steady_clock::now();
+
   msgToTensor(received_point_cloud_msg);
   pillarize();
   removal_stage();
+  tensorToMsg();
+
+  auto t1 = std::chrono::steady_clock::now();
+  std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
+  RCLCPP_INFO(get_logger(), "Overall time needed for the algorithm is %f sec", time_used_.count());
 }
 
 

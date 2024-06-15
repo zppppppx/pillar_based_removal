@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <unordered_set>
 
 // ros
 #include <rclcpp/rclcpp.hpp>
@@ -37,14 +38,17 @@ class PillarBasedRemoval : public rclcpp::Node {
 
 
 private:
+    bool verbose_;
+
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_publisher_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_subscriber_;
     std::string subscription_name_;
+    std::string publisher_name_;
 
     // sensor_msgs::msg::PointCloud2 received_point_cloud_;
     // data variables
     PointCloudT received_point_cloud_;
-    sensor_msgs::msg::PointCloud2 target_point_cloud_;
+    sensor_msgs::msg::PointCloud2 target_point_cloud_msg_;
     size_t num_received_points_;
     size_t num_send_points_;
 

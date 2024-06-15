@@ -23,8 +23,12 @@ void PillarBasedRemoval::set_params()
                                             "large number to cover all the pillars.");
   declare_param<std::vector<double>>("lidar_ranges", std::vector<double>{-90, -90, 90, 90}, "This parameter accepts a vector which represents "
                                                     "[xmin, ymin, xmax, ymax] of the lidar, the unit is [meter]");
-  declare_param<double>("environment_radius", 1.8, "This paramter decides the radius of the environment to check in "
+  declare_param<double>("environment_radius", 1.8, "This parameter decides the radius of the environment to check in "
                                              "the removal stage, the unit is [meter]");
+  declare_param<double>("env_min_threshold", 0.45, "This parameter is a threshold for comparing each pillar's lowest point with surrounding "
+                                                    "environment's lowest point, the unit is [meter]");
+  declare_param<double>("max_min_threshold", 0.45, "This parameter is a threshold for comparing each pillar's highest point with its lowest point, "
+                                                    "the unit is [meter]");
   declare_param<std::vector<double>>("rebuild_radiuses", std::vector<double>{1.8, 5.4}, "This parameter decides how large area to rebuild the "
                                                                    "surrounding ground, multiple values mean we want to "
                                                                    "use different radius for different ranges, the unit "
@@ -39,8 +43,13 @@ void PillarBasedRemoval::set_params()
   max_num_pillars_ = get_parameter("max_num_pillars").as_int();
   lidar_ranges_ = get_parameter("lidar_ranges").as_double_array();
   environment_radius_ = get_parameter("environment_radius").as_double();
+  env_min_threshold_ = get_parameter("env_min_threshold").as_double();
+  max_min_threshold_ = get_parameter("max_min_threshold").as_double();
   rebuild_radiuses_ = get_parameter("rebuild_radiuses").as_double_array();
   range_split_ = get_parameter("range_split").as_double_array();
+
+  num_received_points_ = 0;
+  num_send_points_ = 0;
   
 }
 
@@ -71,6 +80,10 @@ void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &receiv
                             "\nThe size of the point tensor is %d, and the first point's x is %f", 
                             (int) num_received_points_, time_used_.count(), 
                             (int)point_cloud_tensor_.size(), point_cloud_tensor_ptr[0]);
+}
+
+void PillarBasedRemoval::tensorToMsg() {
+  
 }
 
 

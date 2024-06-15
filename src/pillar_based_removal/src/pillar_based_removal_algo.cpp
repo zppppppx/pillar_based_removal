@@ -4,7 +4,7 @@ void PillarBasedRemoval::pillarize() {
     auto t0 = std::chrono::steady_clock::now();
     std::array<float, 3> psize_xyz {resolution_, resolution_, 60};
     std::array<float, 6> coors_range_xyz {lidar_ranges_[0], lidar_ranges_[1], -30, lidar_ranges_[2], lidar_ranges_[3], 30};
-    int num_point_features = 3;
+    int num_point_features = 1;
     int max_num_pillars = max_num_pillars_;
     int max_num_points_per_voxel = 2;
     PillarizeCPU3D p2p {
@@ -15,22 +15,23 @@ void PillarBasedRemoval::pillarize() {
         max_num_points_per_voxel
     };
 
-    auto pillar_tuple = p2p.point_to_voxel_full(point_cloud_tensor_, true);
+    auto pillar_tuple = p2p.point_to_pillar_full(point_cloud_tensor_, true);
     pillars_ = std::get<0>(pillar_tuple);
     pillar_indices_ = std::get<1>(pillar_tuple);
     point_pillar_idx_ = std::get<3>(pillar_tuple);
     auto pillars_rw = pillars_.tview<float, 3>();
-    pillars_highest_ = pillars_.select(1, 0).select(1, 2).unsqueeze(1);
+    pillars_highest_ = pillars_.select(1, 0).select(1, 0).unsqueeze(1);
     // auto hi_ptr = pillars_highest_.data_ptr<float>();
-    // auto hi_rw = pillars_highest_.tview<float, 2>();
-    pillars_lowest_ = pillars_.select(1, 1).select(1, 2).unsqueeze(1);
-    // auto lo_rw = pillars_lowest_.tview<float, 2>();
+    auto hi_rw = pillars_highest_.tview<float, 2>();
+    pillars_lowest_ = pillars_.select(1, 1).select(1, 0).unsqueeze(1);
+    kept_pillars_ = tv::zeros({pillars_.dim(0), 1}, tv::uint16, device_num_);
+    auto lo_rw = pillars_lowest_.tview<float, 2>();
     // auto lo_ptr = pillars_lowest_.data_ptr<float>();
-    // tv::ssprint(pillars_.shape(), pillars_highest_.shape(), hi_rw(1, 0), lo_rw(1, 0), pillars_rw(1, 0, 2), pillars_rw(1, 1, 2));
+    tv::ssprint(pillars_.shape(), pillars_highest_.shape(), hi_rw(1, 0), lo_rw(1, 0), pillars_rw(1, 0, 0), pillars_rw(1, 1, 0));
 
     auto p2p_grid_size = p2p.get_grid_size();
     grid_size_.assign(p2p_grid_size.begin(), p2p_grid_size.end());
-    tv::ssprint("grid_size", p2p_grid_size);
+    // tv::ssprint("grid_size", p2p_grid_size);
 
     auto t1 = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
@@ -66,7 +67,7 @@ void PillarBasedRemoval::removal_stage() {
     std::vector<int32_t> ksize{1, adjacent_pillars, adjacent_pillars};
     int32_t KV = std::accumulate(std::begin(ksize), std::end(ksize), 1, std::multiplies<>{});
     bool is_subm = true;
-    int out_inds_num_limit = 10000000;
+    int out_inds_num_limit = 0;
     int batch_size = 1;
     std::vector<int32_t> padding{0, 0, 0};
     std::vector<int32_t> dilation{1, 1, 1};
@@ -97,7 +98,7 @@ void PillarBasedRemoval::removal_stage() {
     ws_tensors.insert({SPCONV_ALLOC_OUT_INDICES, out_inds});
     StaticAllocator alloc(ws_tensors);
 
-    tv::ssprint(out_dims, workspace_size);
+    // tv::ssprint(out_dims, workspace_size);
     // padding with batch
     auto pillar_indices_padded = tv::zeros({pillar_indices_.dim(0), 4}, tv::int32, device_num_);
     tv::dispatch<int, int>(pillar_indices_padded.dtype(), [&](auto I) {
@@ -121,21 +122,42 @@ void PillarBasedRemoval::removal_stage() {
         pillar_indices_.dim(0));
 
     auto pair_rw = pair.tview<int, 3>();
-    tv::ssprint("input/output num_indices", pillar_indices_.dim(0), num_act_out_real, pair_rw(0, 0, 0), pair_rw(0, 0, 1));
-    // cudaStream_t stream = -1;
-    // tv::Context ctx;
-    // ctx.set_cuda_stream_int(reinterpret_cast<std::uintptr_t>(stream));
+    // tv::ssprint("input/output num_indices", pillar_indices_.dim(0), num_act_out_real, pair_rw(0, 0, 0), pair_rw(0, 0, 1));
+
     tv::Tensor indices_pair_num = tv::zeros({KV}, tv::int32, device_num_);
     environment_lowest_ = tv::empty({pillars_lowest_.dim(0), 1}, tv::float32, device_num_);
-    // SpconvOps::indice_maxpool(environment_lowest_, pillars_lowest_, pair, indices_pair_num, 
-    //                             num_act_out_real, reinterpret_cast<std::uintptr_t>(stream));
-    
+
+    tv::check_shape(environment_lowest_, {-1, pillars_lowest_.dim(1)});
+
+    auto indices_pair_num_ptr = indices_pair_num.data_ptr<int>();
+    for (int i = 0; i < indices_pair_num.dim(0); ++i) {
+        int nhot = indices_pair_num_ptr[i];
+        nhot = std::min(nhot, int(pair.dim(2)));
+        if (nhot <= 0){
+            continue;
+        }
+        auto inp_indices = pair[0][i].slice_first_axis(0, nhot);
+        auto out_indices = pair[1][i].slice_first_axis(0, nhot);
+        IndiceMaxPoolCPU::forward(environment_lowest_, pillars_lowest_, out_indices, inp_indices);
+    }   
 
     auto t1 = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
-    // std::cout << "\n转换一次地图用时: " << time_used_.count() << " 秒。" << std::endl;
+
+    auto kept_pillars_ptr = kept_pillars_.data_ptr<uint16_t>();
+    auto pillars_lowest_ptr = pillars_lowest_.data_ptr<float>();
+    auto pillars_highest_ptr = pillars_highest_.data_ptr<float>();
+    auto environment_lowest_ptr = environment_lowest_.data_ptr<float>();
+    for(int i = 0; i < kept_pillars_.dim(0); i++) {
+        if((pillars_lowest_ptr[i] - pillars_highest_ptr[i] >= max_min_threshold_) &&
+            (pillars_lowest_ptr[i] - environment_lowest_ptr[i] >= env_min_threshold_)) {
+            kept_pillars_ptr[i] = 1;
+            num_send_points_ += 1;
+        }
+    }
+
 
     // auto t1 = Time::now();
     // fsec duration = t1 - t0;
-    RCLCPP_INFO(get_logger(), "Time needed for removal stage is %.10f", time_used_.count());
+    RCLCPP_INFO(get_logger(), "Time needed for removal stage is %.10f, and kept pillars are: %d", time_used_.count(), num_send_points_);
 }

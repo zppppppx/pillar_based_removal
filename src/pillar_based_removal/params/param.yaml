@@ -1,5 +1,6 @@
 pillar_based_removal_node:
   ros__parameters:
+    verbose: true
     subscription_name: "kitti/velo"
 
     device: "cpu"

@@ -33,6 +33,7 @@ class PillarBasedRemoval : public rclcpp::Node {
         spconvlib::spconv::csrc::sparse::all::ops_cpu3d::Point2VoxelCPU;
     using SpconvOps = spconvlib::spconv::csrc::sparse::all::SpconvOps;
     using StaticAllocator = spconvlib::spconv::csrc::sparse::alloc::StaticAllocator;
+    using IndiceMaxPoolCPU = spconvlib::spconv::csrc::sparse::maxpool::IndiceMaxPoolCPU;
 
 
 private:
@@ -67,6 +68,8 @@ private:
     int num_features_;
     std::vector<double> lidar_ranges_;
     double environment_radius_;
+    double env_min_threshold_;
+    double max_min_threshold_;
     std::vector<double> rebuild_radiuses_;
     std::vector<double> range_split_;
 
@@ -79,6 +82,7 @@ private:
     void set_params();
     // Convert the PointCloud2 message to tensorview tensor.
     void msgToTensor(const sensor_msgs::msg::PointCloud2 &point_cloud);
+    void tensorToMsg();
 
     /*
     Algorithms implemention

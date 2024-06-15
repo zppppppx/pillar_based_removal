@@ -22,12 +22,12 @@ void PillarBasedRemoval::pillarize() {
     auto pillars_rw = pillars_.tview<float, 3>();
     pillars_highest_ = pillars_.select(1, 0).select(1, 0).unsqueeze(1);
     // auto hi_ptr = pillars_highest_.data_ptr<float>();
-    auto hi_rw = pillars_highest_.tview<float, 2>();
+    // auto hi_rw = pillars_highest_.tview<float, 2>();
     pillars_lowest_ = pillars_.select(1, 1).select(1, 0).unsqueeze(1);
     kept_pillars_ = tv::zeros({pillars_.dim(0), 1}, tv::uint16, device_num_);
-    auto lo_rw = pillars_lowest_.tview<float, 2>();
+    // auto lo_rw = pillars_lowest_.tview<float, 2>();
     // auto lo_ptr = pillars_lowest_.data_ptr<float>();
-    tv::ssprint(pillars_.shape(), pillars_highest_.shape(), hi_rw(1, 0), lo_rw(1, 0), pillars_rw(1, 0, 0), pillars_rw(1, 1, 0));
+    // tv::ssprint(pillars_.shape(), pillars_highest_.shape(), hi_rw(1, 0), lo_rw(1, 0), pillars_rw(1, 0, 0), pillars_rw(1, 1, 0));
 
     auto p2p_grid_size = p2p.get_grid_size();
     grid_size_.assign(p2p_grid_size.begin(), p2p_grid_size.end());
@@ -35,7 +35,8 @@ void PillarBasedRemoval::pillarize() {
 
     auto t1 = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
-    RCLCPP_INFO(get_logger(), "Time needed for pillarization is %f", time_used_);
+    if(verbose_)
+        RCLCPP_INFO(get_logger(), "Time needed for pillarization is %f", time_used_);
 
 }
 
@@ -159,5 +160,7 @@ void PillarBasedRemoval::removal_stage() {
 
     // auto t1 = Time::now();
     // fsec duration = t1 - t0;
-    RCLCPP_INFO(get_logger(), "Time needed for removal stage is %.10f, and kept pillars are: %d", time_used_.count(), num_send_points_);
+    if(verbose_)
+        RCLCPP_INFO(get_logger(), "Time needed for removal stage is %.10f, and kept pillars are: %d",
+                                    time_used_.count(), num_send_points_);
 }

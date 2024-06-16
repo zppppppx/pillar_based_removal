@@ -139,6 +139,7 @@ void PillarBasedRemoval::callback(const sensor_msgs::msg::PointCloud2 &received_
   msgToTensor(received_point_cloud_msg);
   pillarize();
   removal_stage();
+  rebuild_stage();
   tensorToMsg();
 
   auto t1 = std::chrono::steady_clock::now();

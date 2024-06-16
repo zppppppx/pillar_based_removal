@@ -11,8 +11,9 @@ find_package(sensor_msgs REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(CUDA REQUIRED)
+find_package(CUDAToolkit REQUIRED)
 
-add_executable(pillar_based_removal_node src/pillar_based_removal_node.cpp src/pillar_based_removal_algo.cpp)
+add_executable(pillar_based_removal_node src/pillar_based_removal_node.cpp src/pillar_based_removal_algo.cu)
 
 find_library(LIBSPCONV NAMES spconv PATHS /usr/local/lib)
 if(NOT LIBSPCONV)
@@ -30,6 +31,9 @@ target_include_directories(pillar_based_removal_node PUBLIC
 target_link_libraries(pillar_based_removal_node 
   ${LIBSPCONV}
   ${PCL_LIBRARIES}
+  CUDA::cublas
+  CUDA::cudart 
+  spconv
 )
 
 ament_target_dependencies(pillar_based_removal_node 

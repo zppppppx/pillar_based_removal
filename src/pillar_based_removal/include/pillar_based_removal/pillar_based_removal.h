@@ -15,6 +15,15 @@
 #include <spconvlib/spconv/csrc/sparse/all/SpconvOps.h>
 #include <spconvlib/spconv/csrc/sparse/alloc/StaticAllocator.h>
 #include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPoolCPU.h>
+#include <spconvlib/spconv/csrc/sparse/convops/gemmops/GemmTunerSimple.h>
+#include <spconvlib/spconv/csrc/sparse/convops/spops/ConvGemmOps.h>
+#include <spconvlib/cumm/gemm/main/GemmMainUnitTest.h>
+#include <spconvlib/spconv/csrc/sparse/convops/SimpleExternalSpconvMatmul.h>
+
+#include <tensorview/io/jsonarray.h>
+#include <tensorview/parallel/map.h>
+#include <tensorview/contexts/core.h>
+
 // #include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPool.h>
 
 // customized point cloud type
@@ -35,8 +44,13 @@ class PillarBasedRemoval : public rclcpp::Node {
     using SpconvOps = spconvlib::spconv::csrc::sparse::all::SpconvOps;
     using StaticAllocator = spconvlib::spconv::csrc::sparse::alloc::StaticAllocator;
     using IndiceMaxPoolCPU = spconvlib::spconv::csrc::sparse::maxpool::IndiceMaxPoolCPU;
-
-
+    using GemmTunerSimple =
+        spconvlib::spconv::csrc::sparse::convops::spops::GemmTuner;
+    using GemmMain = spconvlib::cumm::gemm::main::GemmMainUnitTest;
+    using SimpleExternalSpconvMatmul =
+        spconvlib::spconv::csrc::sparse::convops::SimpleExternalSpconvMatmul;
+    using ConvGemmOps =
+        spconvlib::spconv::csrc::sparse::convops::spops::ConvGemmOps;
 private:
     bool verbose_;
 
@@ -95,6 +109,8 @@ private:
     void pillarize();
 
     void removal_stage();
+
+    void rebuild_stage();
 
 public:
     PillarBasedRemoval();

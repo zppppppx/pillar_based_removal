@@ -90,7 +90,7 @@ void PillarBasedRemoval::removal_stage() {
 
     tv::Tensor pair = tv::empty({2, KV, pillars_.dim(0)}, tv::int32, device_num_);
     tv::Tensor indices_kernel_num = tv::zeros({KV}, tv::int32, device_num_);
-    tv::Tensor out_inds = tv::empty({pillars_.dim(0), pillars_.ndim() + 1}, tv::int32, device_num_);
+    tv::Tensor out_inds = tv::empty({(int)pillars_.dim(0), (int)pillars_.ndim() + 1}, tv::int32, device_num_);
     // tv::ssprint("In removal stage:", pillars_.shape());
 
     ws_tensors.insert({SPCONV_ALLOC_PAIR_FWD, pair});
@@ -122,7 +122,7 @@ void PillarBasedRemoval::removal_stage() {
         reinterpret_cast<std::uintptr_t>(stream), out_inds_num_limit,
         pillar_indices_.dim(0));
 
-    auto pair_rw = pair.tview<int, 3>();
+    // auto pair_rw = pair.tview<int, 3>();
     // tv::ssprint("input/output num_indices", pillar_indices_.dim(0), num_act_out_real, pair_rw(0, 0, 0), pair_rw(0, 0, 1));
 
     tv::Tensor indices_pair_num = tv::zeros({KV}, tv::int32, device_num_);
@@ -142,8 +142,7 @@ void PillarBasedRemoval::removal_stage() {
         IndiceMaxPoolCPU::forward(environment_lowest_, pillars_lowest_, out_indices, inp_indices);
     }   
 
-    auto t1 = std::chrono::steady_clock::now();
-    std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
+    
 
     auto kept_pillars_ptr = kept_pillars_.data_ptr<uint16_t>();
     auto pillars_lowest_ptr = pillars_lowest_.data_ptr<float>();
@@ -157,10 +156,145 @@ void PillarBasedRemoval::removal_stage() {
         }
     }
 
-
+    auto t1 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
     // auto t1 = Time::now();
     // fsec duration = t1 - t0;
     if(verbose_)
         RCLCPP_INFO(get_logger(), "Time needed for removal stage is %.10f, and kept pillars are: %d",
                                     time_used_.count(), num_send_points_);
+}
+
+void PillarBasedRemoval::rebuild_stage() {
+    // padding with batch
+    auto pillar_indices_padded = tv::zeros({pillar_indices_.dim(0), 4}, tv::int32, device_num_);
+    tv::dispatch<int, int>(pillar_indices_padded.dtype(), [&](auto I) {
+        using T = decltype(I);
+        auto pillar_indices_padded_rw = pillar_indices_padded.tview<T, 2>();
+        auto pillar_indices_rw = pillar_indices_.tview<T, 2>();
+
+        for(size_t i = 0; i < pillar_indices_rw.dim(0); i++) {
+            pillar_indices_padded_rw((int)i, 1) = pillar_indices_rw((int)i, 0);
+            pillar_indices_padded_rw((int)i, 2) = pillar_indices_rw((int)i, 1);
+            pillar_indices_padded_rw((int)i, 3) = pillar_indices_rw((int)i, 2);
+        }
+    });
+
+    // Set up convolution working space
+    for(int i = 0; i < (int) rebuild_radiuses_.size(); i++) {
+        int rebuild_num = (int) round(rebuild_radiuses_[i] / resolution_ - 0.5) * 2 + 1; // kernel size
+        std::vector<int32_t> ksize{1, rebuild_num, rebuild_num};
+        int32_t KV = std::accumulate(std::begin(ksize), std::end(ksize), 1, std::multiplies<>{});
+        bool is_subm = true;
+        int out_inds_num_limit = 0;
+        int batch_size = 1;
+        std::vector<int32_t> padding{0, 0, 0};
+        std::vector<int32_t> dilation{1, 1, 1};
+        std::vector<int32_t> stride{1, 1, 1};
+
+        std::vector<int32_t> input_dims(grid_size_.begin(), grid_size_.end());
+        auto out_dims = SpconvOps::get_conv_output_size(input_dims, ksize, stride,
+                                                    padding, dilation);
+
+        int workspace_size = SpconvOps::get_indice_gen_workspace_size(
+                KV, pillars_.dim(0), out_inds_num_limit,
+                0, is_subm, false, false);
+        tv::Tensor workspace = tv::empty({workspace_size}, tv::uint8, device_num_);
+        auto ws_tensors = SpconvOps::get_indice_gen_tensors_from_workspace(
+                workspace.raw_data(), KV, pillars_.dim(0),
+                pillars_.dim(0), 0, is_subm,
+                false, false);
+
+        tv::Tensor pair = tv::empty({2, KV, pillars_.dim(0)}, tv::int32, device_num_);
+        tv::Tensor indices_kernel_num = tv::zeros({KV}, tv::int32, device_num_);
+        tv::Tensor out_inds = tv::empty({(int)pillars_.dim(0), (int)pillars_.ndim() + 1}, tv::int32, device_num_);
+        // tv::ssprint("In removal stage:", pillars_.shape());
+
+        ws_tensors.insert({SPCONV_ALLOC_PAIR_FWD, pair});
+        ws_tensors.insert(
+            {SPCONV_ALLOC_INDICE_NUM_PER_LOC, indices_kernel_num});
+        ws_tensors.insert({SPCONV_ALLOC_OUT_INDICES, out_inds});
+        StaticAllocator alloc(ws_tensors);
+
+
+        uint* stream = 0; // Don't use cuda stream
+        int num_act_out_real = SpconvOps::get_indice_pairs(
+            alloc, pillar_indices_padded, batch_size, out_dims,
+            static_cast<int>(tv::gemm::SparseConvAlgo::kNative), ksize, stride,
+            padding, dilation, {0, 0, 0}, is_subm, false,
+            reinterpret_cast<std::uintptr_t>(stream), out_inds_num_limit,
+            pillar_indices_.dim(0));
+
+        // Convolution
+        tv::Tensor weights = tv::full({1, 1, 1, 3, 3}, 1, tv::uint16, device_num_);
+        tv::Tensor bias = tv::zeros({1}, tv::uint16, device_num_);
+        tv::Tensor conv_kept_pillars =
+            tv::empty({pillar_indices_.dim(0), 1},
+                      tv::float16, device_num_);
+        GemmTunerSimple gemm_tuner(GemmMain::get_all_algo_desp());
+        std::unordered_map<std::string, tv::Tensor> tensor_dict{
+            {SPCONV_ALLOC_FEATURES, kept_pillars_},
+            {SPCONV_ALLOC_FILTERS, weights},
+            {SPCONV_ALLOC_OUT_FEATURES, conv_kept_pillars}};
+        StaticAllocator alloc2(tensor_dict);
+        // the SimpleExternalSpconvMatmul is used to perform bias operations
+        // provided by external bias library such as cublasLt. in pytorch this
+        // class use pytorch matmul.
+        SimpleExternalSpconvMatmul ext_mm(alloc2);
+        // auto arch = ConvGemmOps::get_compute_capability();
+        // ConvGemmOps::indice_conv(
+        //     alloc2, ext_mm, gemm_tuner, true, false, kept_pillars_,
+        //     weights, pair, indices_kernel_num, arch, conv_kept_pillars.dim(0),
+        //     false, true,
+        //     static_cast<int>(tv::gemm::SparseConvAlgo::kNative),
+        //     reinterpret_cast<std::uintptr_t>(stream), bias,
+        //     1.0
+        //     /*bias alpha, only used for leaky relu*/,
+        //     0.0, tv::gemm::Activation::kNone);
+
+        ////////////////////////////////////////////////////////////////////////////
+        // auto max_act_out_theory = SpconvOps::get_handcrafted_max_act_out(
+        //     pillar_indices_.dim(0), ksize, stride, padding, dilation);
+        // int workspace_size = SpconvOps::get_indice_gen_workspace_size(
+        //     KV, pillar_indices_.dim(0), out_inds_num_limit, max_act_out_theory,
+        //     true, false, false);
+        // tv::Tensor workspace = tv::empty({workspace_size}, tv::uint8, device_num_);
+        // auto ws_tensors = SpconvOps::get_indice_gen_tensors_from_workspace(
+        //     workspace.raw_data(), KV, pillar_indices_.dim(0),
+        //     pillar_indices_.dim(0), max_act_out_theory, true, false, false);
+
+        // auto conv_algo = tv::gemm::SparseConvAlgo::kMaskImplicitGemm;
+        // tv::Tensor pair_fwd_padded =
+        //     tv::empty({KV, pillar_indices_.dim(0)}, tv::int32, device_num_);
+
+        // tv::Tensor pair_mask_fwd_padded =
+        //     tv::empty({1, pillar_indices_.dim(0)}, tv::int32, device_num_);
+        // tv::Tensor mask_argsort_fwd_padded =
+        //     tv::empty({1, pillar_indices_.dim(0)}, tv::int32, device_num_);
+        // tv::Tensor out_inds = tv::empty(
+        //     {pillar_indices_.dim(0), 4},
+        //     tv::int32, device_num_);
+
+        // out_inds.copy_cpu_(pillar_indices_padded);
+        // tv::Tensor indices_kernel_num = tv::zeros({KV}, tv::int32, device_num_);
+        // std::tuple<tv::Tensor, int> pair_res;
+
+        // ws_tensors.insert({SPCONV_ALLOC_PAIR_FWD, pair_fwd_padded});
+        // ws_tensors.insert({SPCONV_ALLOC_PAIR_MASK, pair_mask_fwd_padded});
+        // ws_tensors.insert(
+        //     {SPCONV_ALLOC_MASK_ARG_SORT, mask_argsort_fwd_padded});
+        // ws_tensors.insert({SPCONV_ALLOC_OUT_INDICES, out_inds});
+        // ws_tensors.insert(
+        //     {SPCONV_ALLOC_INDICE_NUM_PER_LOC, indices_kernel_num});
+        // StaticAllocator alloc(ws_tensors);
+
+        // uint* stream = 0; // Don't use cuda stream
+        // tv::ssprint(pillar_indices_padded.shape(), input_dims);
+        // pair_res = SpconvOps::get_indice_pairs_implicit_gemm(
+        //     alloc, pillar_indices_padded, batch_size, input_dims,
+        //     static_cast<int>(conv_algo), ksize, stride, padding, dilation,
+        //     {0, 0, 0}, is_subm, false, false /*is_train*/,
+        //     reinterpret_cast<std::uintptr_t>(nullptr), out_inds_num_limit,
+        //     tv::CUDAKernelTimer(false), false);
+    }
 }

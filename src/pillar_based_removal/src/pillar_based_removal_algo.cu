@@ -1,6 +1,3 @@
-#ifndef TV_CUDA
-#define TV_CUDA
-
 #include<pillar_based_removal/pillar_based_removal.h>
 
 void PillarBasedRemoval::pillarize() {
@@ -302,4 +299,9 @@ void PillarBasedRemoval::rebuild_stage() {
     }
 }
 
-#endif
+
+void test() {
+    cublasLtHandle_t handle_ = 0;
+    auto stat = cublasLtCreate(&handle_);
+    std::cout << "Creation status is " << stat << std::endl;
+}

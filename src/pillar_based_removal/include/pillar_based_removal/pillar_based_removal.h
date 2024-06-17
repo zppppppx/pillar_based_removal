@@ -1,5 +1,6 @@
 #ifndef PILLAR_BASED_REMOVAL_H
 #define PILLAR_BASED_REMOVAL_H
+#define TV_CUDA
 
 #include <chrono>
 #include <cmath>
@@ -24,13 +25,14 @@
 #include <tensorview/parallel/map.h>
 #include <tensorview/contexts/core.h>
 
+#include <spconvlib/spconv/csrc/sparse/inference/InferenceOps.h>
+
+
 // #include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPool.h>
 
 // customized point cloud type
 #include "pillar_based_removal/point_cloud_type.h"
 
-// tensor view
-#include <spconvlib/cumm/common/TensorView.h>
 
 class PillarBasedRemoval : public rclcpp::Node {
     // Time types
@@ -118,5 +120,7 @@ public:
 
     void callback(const sensor_msgs::msg::PointCloud2 &received_point_cloud_msg);
 };
+
+void test();
 
 #endif

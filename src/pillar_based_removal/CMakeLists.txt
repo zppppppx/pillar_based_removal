@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(pillar_based_removal LANGUAGES CUDA CXX VERSION 0.1)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra)
 endif()
 
 find_package(ament_cmake REQUIRED)
@@ -14,6 +14,8 @@ find_package(CUDA REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
 add_executable(pillar_based_removal_node src/pillar_based_removal_node.cpp src/pillar_based_removal_algo.cu)
+
+target_compile_options(pillar_based_removal_node PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
 
 find_library(LIBSPCONV NAMES spconv PATHS /usr/local/lib)
 if(NOT LIBSPCONV)
@@ -32,8 +34,8 @@ target_link_libraries(pillar_based_removal_node
   ${LIBSPCONV}
   ${PCL_LIBRARIES}
   CUDA::cublas
-  CUDA::cudart 
-  spconv
+  CUDA::cublasLt
+  CUDA::cudart
 )
 
 ament_target_dependencies(pillar_based_removal_node 
@@ -41,7 +43,6 @@ ament_target_dependencies(pillar_based_removal_node
   sensor_msgs
   PCL
   pcl_conversions
-  CUDA
 )
 
 install(TARGETS pillar_based_removal_node

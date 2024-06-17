@@ -3,3 +3,5 @@ install
 log
 .vscode
 data
+src/pillar_based_removal/spconv
+src/pillar_based_removal/cumm

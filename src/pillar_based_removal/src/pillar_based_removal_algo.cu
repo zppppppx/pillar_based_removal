@@ -1,3 +1,6 @@
+#ifndef TV_CUDA
+#define TV_CUDA
+
 #include<pillar_based_removal/pillar_based_removal.h>
 
 void PillarBasedRemoval::pillarize() {
@@ -240,7 +243,7 @@ void PillarBasedRemoval::rebuild_stage() {
         // the SimpleExternalSpconvMatmul is used to perform bias operations
         // provided by external bias library such as cublasLt. in pytorch this
         // class use pytorch matmul.
-        SimpleExternalSpconvMatmul ext_mm(alloc2);
+        // SimpleExternalSpconvMatmul ext_mm(alloc2);
         // auto arch = ConvGemmOps::get_compute_capability();
         // ConvGemmOps::indice_conv(
         //     alloc2, ext_mm, gemm_tuner, true, false, kept_pillars_,
@@ -298,3 +301,5 @@ void PillarBasedRemoval::rebuild_stage() {
         //     tv::CUDAKernelTimer(false), false);
     }
 }
+
+#endif

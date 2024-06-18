@@ -2,6 +2,9 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 
+# from .pillar_based_removal_algo import *
+import sensor_msgs_py.point_cloud2 as pc2
+
 import torch
 import numpy as np
 from sensor_msgs.msg import PointCloud2
@@ -32,8 +35,10 @@ class PillarBasedRemoval(Node):
         self.subscription_name_ = self.get_parameter("subscription_name").get_parameter_value().string_value
         self.declare_param("publisher_name", "reduced_point_cloud", "This parameter decides the name of the publisher")
         self.publisher_name_ = self.get_parameter("publisher_name").get_parameter_value().string_value
-
-        self.declare_param("device", "cpu", "This parameter decides which device you are going to use, 1. cpu (default), 2. cuda")
+        self.declare_param("point_fields", ["x", "y", "z", "intensity"], "Please specify the point cloud's field names and ensure the \
+                                                                            first three indicate xyz values")
+        self.point_fileds_ = self.get_parameter("point_fields").get_parameter_value().string_array_value
+        self.declare_param("device", "cuda", "This parameter decides which device you are going to use, 1. cpu (default), 2. cuda")
         self.declare_param("resolution", 0.4, "This parameter decides the side length of the square pillar, the unit is [meter]")
         self.declare_param("max_num_pillars", 30000, "This parameter decides how many pillars are allowed, set it to a reasonably"
                                                     "large number to cover all the pillars.")
@@ -49,14 +54,14 @@ class PillarBasedRemoval(Node):
                                                                         "surrounding ground, multiple values mean we want to "
                                                                         "use different radius for different ranges, the unit "
                                                                         "is [meter]")
-        self.declare_param("range_split", {30}, "This parameter denotes the split of different ranges when using "
+        self.declare_param("range_split", [30], "This parameter denotes the split of different ranges when using "
                                                                 "different radius. It should correspond to the number of radiuses "
                                                                 "used. empty for global rebuild, the unit is [meter]")
 
         self.device_ = self.get_parameter("device").get_parameter_value().string_value
         self.device_num_ = -1 if self.device_ == "cpu" else 0
         self.resolution_ = self.get_parameter("resolution").get_parameter_value().double_value
-        self.max_num_pillars_ = self.get_parameter("max_num_pillars").get_parameter_value().int_value
+        self.max_num_pillars_ = self.get_parameter("max_num_pillars").get_parameter_value().integer_value
         self.lidar_ranges_ = self.get_parameter("lidar_ranges").get_parameter_value().double_array_value
         self.environment_radius_ = self.get_parameter("environment_radius").get_parameter_value().double_value
         self.env_min_threshold_ = self.get_parameter("env_min_threshold").get_parameter_value().double_value
@@ -67,13 +72,24 @@ class PillarBasedRemoval(Node):
         self.num_received_points_ = 0
         self.num_send_points_ = 0
 
-    def msgToTensor(self, msg: PointCloud2):
-        dtype = np.dtype(msg.fields)
-        data = np.frombuffer(msg.data, dtype=dtype)
-        return data
+    def _msgToTensor(self, msg: PointCloud2):
+        self.received_point_cloud_msg_ = msg
+        
+        data = pc2.read_points(msg, None, True)
+        num_points = len(data)
+        self.point_cloud_tensor_ = torch.zeros((num_points, 3))
+
+        idx = 0
+        for field_name in self.point_fileds_[:3]:
+            self.point_cloud_tensor_[:, idx] = torch.tensor(data[field_name], 
+                                                            dtype=torch.float32, device=torch.device(self.device_))
+            idx += 1
+
+        self.point_cloud_tensor_ = self.point_cloud_tensor_.contiguous()
 
     def callback(self, msg: PointCloud2):
-        data = self.msgToTensor(msg)
+        self._msgToTensor(msg)
+
 
 def main(args=None):
     rclpy.init(args=args)

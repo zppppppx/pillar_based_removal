@@ -95,10 +95,8 @@ def rebuild_stage(self):
             
             final_kept_pillars[pillar_mask_all][:, 0] += rebuilt_pillars_idx[pillar_mask_range]
 
-    self.kept_pillars_ = final_kept_pillars.squeeze()
-    self.kept_pillars_ = (self.kept_pillars_ > 0)
-    pillar_indices = torch.cumsum(torch.ones((len(self.kept_pillars_), ), device=self.kept_pillars_.device), dim=0) - 1
-    self.kept_pillars_ = pillar_indices[self.kept_pillars_]
+    self.kept_pillars_ = final_kept_pillars
+    
 
     end = time.time()
     duration = end - start

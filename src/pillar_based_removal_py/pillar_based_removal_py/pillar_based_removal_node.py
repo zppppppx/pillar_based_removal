@@ -111,6 +111,10 @@ class PillarBasedRemoval(Node):
     def tensorToMsg(self):
         start = time.time()
 
+        self.kept_pillars_ = (self.kept_pillars_ > 0).squeeze()
+        pillar_indices = torch.cumsum(torch.ones((len(self.kept_pillars_), ), device=self.kept_pillars_.device), dim=0) - 1
+        self.kept_pillars_ = pillar_indices[self.kept_pillars_]
+
         valid_points_indices = torch.isin(self.point_pillar_idx_, self.kept_pillars_).cpu().numpy()
         resolved_data = self.resolved_data[valid_points_indices]
 

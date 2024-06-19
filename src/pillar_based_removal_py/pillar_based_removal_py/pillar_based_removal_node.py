@@ -88,22 +88,25 @@ class PillarBasedRemoval(Node):
         data = pc2.read_points(msg, None, True)
         num_points = len(data)
         self.resolved_data = data
+        t1 = time.time()
         
         self.point_cloud_tensor_ = torch.zeros((num_points, 3), device=torch.device(self.device_))
 
-        idx = 0
-        for field_name in self.point_fileds_[:3]:
-            self.point_cloud_tensor_[:, idx] = torch.tensor(data[field_name], 
-                                                            dtype=torch.float32, device=torch.device(self.device_))
-            idx += 1
+        x_tensor = torch.tensor(np.copy(data['x']), dtype=torch.float32, device=torch.device(self.device_))
+        y_tensor = torch.tensor(np.copy(data['y']), dtype=torch.float32, device=torch.device(self.device_))
+        z_tensor = torch.tensor(np.copy(data['z']), dtype=torch.float32, device=torch.device(self.device_))
+
+        # Stack these tensors along a new dimension (dim=1) to form a matrix
+        self.point_cloud_tensor_ = torch.stack([x_tensor, y_tensor, z_tensor], dim=1)
 
         self.point_cloud_tensor_ = self.point_cloud_tensor_.contiguous()
         self.num_received_points_ = self.point_cloud_tensor_.shape[0]
+        
 
         end = time.time()
         duration = end - start
         if self.verbose_:
-            self.get_logger().info("Time needed for resolving received points is %f" % duration)
+            self.get_logger().info("Time needed for resolving received points is %f, %f, %f" % (duration, t1-start, end-t1))
     
     def tensorToMsg(self):
         start = time.time()

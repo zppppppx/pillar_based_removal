@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
+import array
 
 # from .pillar_based_removal_algo import *
 import sensor_msgs_py.point_cloud2 as pc2
@@ -8,7 +9,8 @@ import sensor_msgs_py.point_cloud2 as pc2
 import torch
 import numpy as np
 from sensor_msgs.msg import PointCloud2
-
+from .pillar_based_removal_algo import *
+import time
 
 class PillarBasedRemoval(Node):
     def __init__(self):
@@ -22,13 +24,19 @@ class PillarBasedRemoval(Node):
             1
         )
 
+        self.publisher = self.create_publisher(
+            PointCloud2,
+            self.publisher_name_,
+            1
+        )
+
     
     def declare_param(self, param_name: str, default, description: str):
         descriptor = ParameterDescriptor(description=description)
         self.declare_parameter(param_name, default, descriptor)
 
     def set_params(self):
-        self.declare_param("verbose", False, "If set true, the description of each module will be verbosely printed in the terminal")
+        self.declare_param("verbose", True, "If set true, the description of each module will be verbosely printed in the terminal")
         self.verbose_ = self.get_parameter("verbose").get_parameter_value().bool_value
 
         self.declare_param("subscription_name", "kitti/velo", "This parameter decides the name of the node subscribed")
@@ -39,22 +47,22 @@ class PillarBasedRemoval(Node):
                                                                             first three indicate xyz values")
         self.point_fileds_ = self.get_parameter("point_fields").get_parameter_value().string_array_value
         self.declare_param("device", "cuda", "This parameter decides which device you are going to use, 1. cpu (default), 2. cuda")
-        self.declare_param("resolution", 0.4, "This parameter decides the side length of the square pillar, the unit is [meter]")
+        self.declare_param("resolution", 0.45, "This parameter decides the side length of the square pillar, the unit is [meter]")
         self.declare_param("max_num_pillars", 30000, "This parameter decides how many pillars are allowed, set it to a reasonably"
                                                     "large number to cover all the pillars.")
-        self.declare_param("lidar_ranges", [-90, -90, 90, 90], "This parameter accepts a vector which represents "
+        self.declare_param("lidar_ranges", [-90., -90., 90., 90.], "This parameter accepts a vector which represents "
                                                             "[xmin, ymin, xmax, ymax] of the lidar, the unit is [meter]")
-        self.declare_param("environment_radius", 1.8, "This parameter decides the radius of the environment to check in "
+        self.declare_param("environment_radius", 0.9, "This parameter decides the radius of the environment to check in "
                                                     "the removal stage, the unit is [meter]")
-        self.declare_param("env_min_threshold", 0.45, "This parameter is a threshold for comparing each pillar's lowest point with surrounding "
+        self.declare_param("env_min_threshold", 0.6, "This parameter is a threshold for comparing each pillar's lowest point with surrounding "
                                                             "environment's lowest point, the unit is [meter]")
-        self.declare_param("max_min_threshold", 0.45, "This parameter is a threshold for comparing each pillar's highest point with its lowest point, "
+        self.declare_param("max_min_threshold", 0.6, "This parameter is a threshold for comparing each pillar's highest point with its lowest point, "
                                                             "the unit is [meter]")
         self.declare_param("rebuild_radiuses", [1.8, 5.4], "This parameter decides how large area to rebuild the "
                                                                         "surrounding ground, multiple values mean we want to "
                                                                         "use different radius for different ranges, the unit "
                                                                         "is [meter]")
-        self.declare_param("range_split", [30], "This parameter denotes the split of different ranges when using "
+        self.declare_param("range_split", [30.], "This parameter denotes the split of different ranges when using "
                                                                 "different radius. It should correspond to the number of radiuses "
                                                                 "used. empty for global rebuild, the unit is [meter]")
 
@@ -72,12 +80,16 @@ class PillarBasedRemoval(Node):
         self.num_received_points_ = 0
         self.num_send_points_ = 0
 
-    def _msgToTensor(self, msg: PointCloud2):
+    def msgToTensor(self, msg: PointCloud2):
+        start = time.time()
+
         self.received_point_cloud_msg_ = msg
         
         data = pc2.read_points(msg, None, True)
         num_points = len(data)
-        self.point_cloud_tensor_ = torch.zeros((num_points, 3))
+        self.resolved_data = data
+        
+        self.point_cloud_tensor_ = torch.zeros((num_points, 3), device=torch.device(self.device_))
 
         idx = 0
         for field_name in self.point_fileds_[:3]:
@@ -86,10 +98,56 @@ class PillarBasedRemoval(Node):
             idx += 1
 
         self.point_cloud_tensor_ = self.point_cloud_tensor_.contiguous()
+        self.num_received_points_ = self.point_cloud_tensor_.shape[0]
+
+        end = time.time()
+        duration = end - start
+        if self.verbose_:
+            self.get_logger().info("Time needed for resolving received points is %f" % duration)
+    
+    def tensorToMsg(self):
+        start = time.time()
+
+        valid_points_indices = torch.isin(self.point_pillar_idx_, self.kept_pillars_).cpu().numpy()
+        resolved_data = self.resolved_data[valid_points_indices]
+
+        memory_view = memoryview(resolved_data)
+        casted = memory_view.cast('B')
+        array_array = array.array('B')
+        array_array.frombytes(casted)
+
+        sending_point_cloud_msg = self.received_point_cloud_msg_
+        sending_point_cloud_msg.data = array_array
+        sending_point_cloud_msg.width = len(resolved_data)
+        sending_point_cloud_msg.height = 1
+        sending_point_cloud_msg.is_dense = False
+        sending_point_cloud_msg.header.stamp = self.get_clock().now().to_msg()
+        
+        self.publisher.publish(sending_point_cloud_msg)
+
+        end = time.time()
+        duration = end - start
+        if self.verbose_:
+            self.get_logger().info("Time needed for resolving target points is %f" % duration)
+
 
     def callback(self, msg: PointCloud2):
-        self._msgToTensor(msg)
+        start = time.time()
 
+        self.msgToTensor(msg)
+        self.pillarize()
+        self.removal_stage()
+        self.rebuild_stage()
+        self.tensorToMsg()
+
+        end = time.time()
+        duration = end - start
+        self.get_logger().info("Overall time needed is %f seconds" % duration)
+
+
+PillarBasedRemoval.pillarize = pillarize
+PillarBasedRemoval.removal_stage = removal_stage
+PillarBasedRemoval.rebuild_stage = rebuild_stage
 
 def main(args=None):
     rclpy.init(args=args)
@@ -98,9 +156,6 @@ def main(args=None):
 
     rclpy.spin(pillar_based_removal_node)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     pillar_based_removal_node.destroy_node()
     rclpy.shutdown()
 

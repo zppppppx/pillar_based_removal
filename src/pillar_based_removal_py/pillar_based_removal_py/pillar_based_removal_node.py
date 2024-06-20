@@ -3,7 +3,6 @@ from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 import array
 
-# from .pillar_based_removal_algo import *
 import sensor_msgs_py.point_cloud2 as pc2
 
 import torch
@@ -45,18 +44,20 @@ class PillarBasedRemoval(Node):
         self.publisher_name_ = self.get_parameter("publisher_name").get_parameter_value().string_value
         self.declare_param("point_fields", ["x", "y", "z", "intensity"], "Please specify the point cloud's field names and ensure the \
                                                                             first three indicate xyz values")
+        self.declare_param("enable_rebuild", True, "If set to False, then the rebuild stage will not take effect")
+        self.enable_rebuild_ = self.get_parameter("enable_rebuild").get_parameter_value().bool_value
         self.point_fileds_ = self.get_parameter("point_fields").get_parameter_value().string_array_value
         self.declare_param("device", "cuda", "This parameter decides which device you are going to use, 1. cpu (default), 2. cuda")
-        self.declare_param("resolution", 0.45, "This parameter decides the side length of the square pillar, the unit is [meter]")
-        self.declare_param("max_num_pillars", 30000, "This parameter decides how many pillars are allowed, set it to a reasonably"
+        self.declare_param("resolution", 0.4, "This parameter decides the side length of the square pillar, the unit is [meter]")
+        self.declare_param("max_num_pillars", 50000, "This parameter decides how many pillars are allowed, set it to a reasonably"
                                                     "large number to cover all the pillars.")
         self.declare_param("lidar_ranges", [-90., -90., 90., 90.], "This parameter accepts a vector which represents "
                                                             "[xmin, ymin, xmax, ymax] of the lidar, the unit is [meter]")
-        self.declare_param("environment_radius", 0.9, "This parameter decides the radius of the environment to check in "
+        self.declare_param("environment_radius", 1.8, "This parameter decides the radius of the environment to check in "
                                                     "the removal stage, the unit is [meter]")
-        self.declare_param("env_min_threshold", 0.6, "This parameter is a threshold for comparing each pillar's lowest point with surrounding "
+        self.declare_param("env_min_threshold", 0.45, "This parameter is a threshold for comparing each pillar's lowest point with surrounding "
                                                             "environment's lowest point, the unit is [meter]")
-        self.declare_param("max_min_threshold", 0.6, "This parameter is a threshold for comparing each pillar's highest point with its lowest point, "
+        self.declare_param("max_min_threshold", 0.45, "This parameter is a threshold for comparing each pillar's highest point with its lowest point, "
                                                             "the unit is [meter]")
         self.declare_param("rebuild_radiuses", [1.8, 5.4], "This parameter decides how large area to rebuild the "
                                                                         "surrounding ground, multiple values mean we want to "
@@ -92,9 +93,9 @@ class PillarBasedRemoval(Node):
         
         self.point_cloud_tensor_ = torch.zeros((num_points, 3), device=torch.device(self.device_))
 
-        x_tensor = torch.tensor(np.copy(data['x']), dtype=torch.float32, device=torch.device(self.device_))
-        y_tensor = torch.tensor(np.copy(data['y']), dtype=torch.float32, device=torch.device(self.device_))
-        z_tensor = torch.tensor(np.copy(data['z']), dtype=torch.float32, device=torch.device(self.device_))
+        x_tensor = torch.tensor(np.copy(data[self.point_fileds_[0]]), dtype=torch.float32, device=torch.device(self.device_))
+        y_tensor = torch.tensor(np.copy(data[self.point_fileds_[1]]), dtype=torch.float32, device=torch.device(self.device_))
+        z_tensor = torch.tensor(np.copy(data[self.point_fileds_[2]]), dtype=torch.float32, device=torch.device(self.device_))
 
         # Stack these tensors along a new dimension (dim=1) to form a matrix
         self.point_cloud_tensor_ = torch.stack([x_tensor, y_tensor, z_tensor], dim=1)
@@ -117,6 +118,7 @@ class PillarBasedRemoval(Node):
 
         valid_points_indices = torch.isin(self.point_pillar_idx_, self.kept_pillars_).cpu().numpy()
         resolved_data = self.resolved_data[valid_points_indices]
+        self.num_send_points_ = np.sum(valid_points_indices)
 
         memory_view = memoryview(resolved_data)
         casted = memory_view.cast('B')
@@ -137,6 +139,14 @@ class PillarBasedRemoval(Node):
         if self.verbose_:
             self.get_logger().info("Time needed for resolving target points is %f" % duration)
 
+    def save_points(self, data, path):
+        x = data[self.point_fileds_[0]]
+        y = data[self.point_fileds_[1]]
+        z = data[self.point_fileds_[2]]
+        points = np.stack((x, y, z), axis = 1)
+
+        np.save(path, points)
+        self.get_logger().info("Points saved to %s" % path)
 
     def callback(self, msg: PointCloud2):
         start = time.time()
@@ -147,9 +157,12 @@ class PillarBasedRemoval(Node):
         self.rebuild_stage()
         self.tensorToMsg()
 
+        reduced_num = self.num_received_points_ - self.num_send_points_
+        reduced_percentage = reduced_num / self.num_received_points_
+
         end = time.time()
         duration = end - start
-        self.get_logger().info("Overall time needed is %f seconds" % duration)
+        self.get_logger().info("Overall time needed is {:.5f} seconds, reduced {:.2%}".format(duration, reduced_percentage))
 
 
 PillarBasedRemoval.pillarize = pillarize

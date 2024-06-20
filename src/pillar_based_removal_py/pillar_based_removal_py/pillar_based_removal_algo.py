@@ -66,7 +66,7 @@ def rebuild_stage(self):
 
     range_split = [float('-inf')] + list(self.range_split_)+ [float('inf')]
 
-    final_kept_pillars = self.kept_pillars_.clone()
+    final_kept_pillars = self.kept_pillars_.clone().squeeze()
 
     rebuild_dims = [round(rebuild_radius / self.resolution_ - 0.5) * 2 + 1 for rebuild_radius in self.rebuild_radiuses_]
     for idx, rebuild_dim in enumerate(rebuild_dims):
@@ -93,7 +93,7 @@ def rebuild_stage(self):
             output_tensor = conv_layer(kept_pillars_sparse)
             rebuilt_pillars_idx = output_tensor.features.squeeze()
             
-            final_kept_pillars[pillar_mask_all][:, 0] += rebuilt_pillars_idx[pillar_mask_range]
+            final_kept_pillars[pillar_mask_all] += rebuilt_pillars_idx[pillar_mask_range]
 
     self.kept_pillars_ = final_kept_pillars
     

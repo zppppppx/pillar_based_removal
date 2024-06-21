@@ -25,8 +25,8 @@ endif()
 target_include_directories(pillar_based_removal_node PUBLIC
   include
   ${PCL_INCLUDE_DIRS}
-  "/root/spconv_build/cumm/include"
-  "/root/spconv_build/spconv/include"
+  "/root/spconv_cpp/cumm/include"
+  "/root/spconv_cpp/spconv/include"
   "/opt/ros/humble/include/pcl_conversions"
 )
 

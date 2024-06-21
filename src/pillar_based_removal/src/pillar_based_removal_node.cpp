@@ -64,26 +64,27 @@ void PillarBasedRemoval::msgToTensor(const sensor_msgs::msg::PointCloud2 &receiv
 
   pcl::fromROSMsg<PointT>(received_point_cloud_msg, received_point_cloud_);
   num_received_points_ = received_point_cloud_.points.size();
+  auto t2 = std::chrono::steady_clock::now();
   
-  point_cloud_tensor_ = tv::zeros({num_received_points_, 3}, tv::type_v<float>, device_num_);
+  point_cloud_tensor_ = tv::zeros({num_received_points_, 3}, tv::type_v<float>, -1);
   auto point_cloud_tensor_ptr = point_cloud_tensor_.data_ptr<float>();
 
-  tv::dispatch<float, float>(point_cloud_tensor_.dtype(), [&](auto I) {
-    using T = decltype(I);
-    auto point_cloud_tensor_rw = point_cloud_tensor_.tview<T, 2>();
-    for(size_t i = 0; i < num_received_points_; i++) {
-      point_cloud_tensor_rw((int)i, 0) = received_point_cloud_.points[i].x;
-      point_cloud_tensor_rw((int)i, 1) = received_point_cloud_.points[i].y;
-      point_cloud_tensor_rw((int)i, 2) = received_point_cloud_.points[i].z;
-    }
-  });
+  for(size_t i = 0; i < num_received_points_; i++) {
+    point_cloud_tensor_ptr[3*i] = (float) received_point_cloud_.points[i].x;
+    point_cloud_tensor_ptr[3*i+1] = (float) received_point_cloud_.points[i].y;
+    point_cloud_tensor_ptr[3*i+2] = (float) received_point_cloud_.points[i].z;
+  }
+
+
+  // point_cloud_tensor_ = point_cloud_tensor_.cuda();
 
   auto t1 = std::chrono::steady_clock::now();
   std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);
+  std::chrono::duration<double> time_used_2 = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t0);
   
   if(verbose_)
-    RCLCPP_INFO(get_logger(), "The time needed for converting %d points to tensor is %f.",
-                              (int) num_received_points_, time_used_.count());
+    RCLCPP_INFO(get_logger(), "The time needed for converting %d points to tensor is %f, %f.",
+                              (int) num_received_points_, time_used_.count(), time_used_2.count());
 }
 
 void PillarBasedRemoval::tensorToMsg() {
@@ -138,9 +139,9 @@ void PillarBasedRemoval::callback(const sensor_msgs::msg::PointCloud2 &received_
 
   msgToTensor(received_point_cloud_msg);
   pillarize();
-  removal_stage();
-  rebuild_stage();
-  tensorToMsg();
+  // removal_stage();
+  // rebuild_stage();
+  // tensorToMsg();
 
   auto t1 = std::chrono::steady_clock::now();
   std::chrono::duration<double> time_used_ = std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0);

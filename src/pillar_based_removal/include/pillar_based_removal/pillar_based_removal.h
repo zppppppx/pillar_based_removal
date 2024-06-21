@@ -13,6 +13,7 @@
 // voxelization lib
 #include <spconvlib/spconv/csrc/sparse/all/ops3d/Point2Voxel.h>
 #include <spconvlib/spconv/csrc/sparse/all/ops_cpu3d/Point2VoxelCPU.h>
+#include <spconvlib/spconv/csrc/sparse/all/ops3d/Point2Voxel.h>
 #include <spconvlib/spconv/csrc/sparse/all/SpconvOps.h>
 #include <spconvlib/spconv/csrc/sparse/alloc/StaticAllocator.h>
 #include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPoolCPU.h>
@@ -43,6 +44,8 @@ class PillarBasedRemoval : public rclcpp::Node {
         spconvlib::spconv::csrc::sparse::all::ops3d::Point2Voxel;
     using PillarizeCPU3D =
         spconvlib::spconv::csrc::sparse::all::ops_cpu3d::Point2VoxelCPU;
+    using Pillarize3D =
+        spconvlib::spconv::csrc::sparse::all::ops3d::Point2Voxel;
     using SpconvOps = spconvlib::spconv::csrc::sparse::all::SpconvOps;
     using StaticAllocator = spconvlib::spconv::csrc::sparse::alloc::StaticAllocator;
     using IndiceMaxPoolCPU = spconvlib::spconv::csrc::sparse::maxpool::IndiceMaxPoolCPU;

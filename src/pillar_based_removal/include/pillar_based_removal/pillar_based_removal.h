@@ -1,6 +1,5 @@
 #ifndef PILLAR_BASED_REMOVAL_H
 #define PILLAR_BASED_REMOVAL_H
-#define TV_CUDA
 
 #include <chrono>
 #include <cmath>
@@ -13,8 +12,8 @@
 // voxelization lib
 #include <spconvlib/spconv/csrc/sparse/all/ops3d/Point2Voxel.h>
 #include <spconvlib/spconv/csrc/sparse/all/ops_cpu3d/Point2VoxelCPU.h>
-#include <spconvlib/spconv/csrc/sparse/all/ops3d/Point2Voxel.h>
 #include <spconvlib/spconv/csrc/sparse/all/SpconvOps.h>
+#include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPool.h> 
 #include <spconvlib/spconv/csrc/sparse/alloc/StaticAllocator.h>
 #include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPoolCPU.h>
 #include <spconvlib/spconv/csrc/sparse/convops/gemmops/GemmTunerSimple.h>
@@ -29,7 +28,6 @@
 #include <spconvlib/spconv/csrc/sparse/inference/InferenceOps.h>
 
 
-// #include <spconvlib/spconv/csrc/sparse/maxpool/IndiceMaxPool.h>
 
 // customized point cloud type
 #include "pillar_based_removal/point_cloud_type.h"
@@ -48,7 +46,7 @@ class PillarBasedRemoval : public rclcpp::Node {
         spconvlib::spconv::csrc::sparse::all::ops3d::Point2Voxel;
     using SpconvOps = spconvlib::spconv::csrc::sparse::all::SpconvOps;
     using StaticAllocator = spconvlib::spconv::csrc::sparse::alloc::StaticAllocator;
-    using IndiceMaxPoolCPU = spconvlib::spconv::csrc::sparse::maxpool::IndiceMaxPoolCPU;
+    using IndiceMaxPool = spconvlib::spconv::csrc::sparse::maxpool::IndiceMaxPool;
     using GemmTunerSimple =
         spconvlib::spconv::csrc::sparse::convops::spops::GemmTuner;
     using GemmMain = spconvlib::cumm::gemm::main::GemmMainUnitTest;
@@ -81,6 +79,8 @@ private:
     tv::Tensor pillar_indices_;
 
     std::vector<int32_t> grid_size_;
+
+    cudaStream_t stream_ = 0;
 
 
     // parameters

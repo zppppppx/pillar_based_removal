@@ -1,6 +1,6 @@
 # Pillar-based-removal
 
-Pillar-based-removal is a point cloud pre-processing simple, effective and robust algorithm to remove irrelevant points for 3D object detection tasks.
+Pillar-based-removal is a simple, effective, and robust point cloud pre-processing algorithm to remove irrelevant points for 3D object detection tasks.
 
 https://github.com/zppppppx/pillar_based_removal/assets/43416275/25636da8-ff69-4cc3-bc17-e41c52eb9c18
 
